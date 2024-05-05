@@ -1,0 +1,740 @@
+---
+title: "Chapter 9. Pragmatic clinical trials in the elderly"
+subtitle: "Analysis of studies in PubMed and ClinicalTrials.gov"
+author: "Javier Mancilla Galindo"
+date: "`r Sys.Date()`"
+execute: 
+  echo: false
+  warning: false
+toc: true
+format:
+  pdf:
+    documentclass: scrartcl
+editor: visual
+---
+
+\pagebreak
+
+# Packages and session information
+
+```{r}
+
+if (!require("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  tidyverse,
+  readxl,
+  maps,
+  RColorBrewer,
+  gridExtra,
+  officer,
+  flextable,
+  report,
+  gt
+)
+
+```
+
+```{r}
+figfolder <- "../results/output_figures"
+tabfolder <- "../results/output_tables"
+dir.create(figfolder, showWarnings = FALSE)
+dir.create(tabfolder, showWarnings = FALSE)
+
+# Credits chunk of code: Alex Bossers, Utrecht University (a.bossers@uu.nl)
+
+session <- sessionInfo()
+# remove clutter
+session$BLAS <- NULL
+session$LAPACK <- NULL
+session$loadedOnly <- NULL
+
+session
+```
+
+\pagebreak
+
+
+```{r}
+#| include: false 
+data <- read.csv("../data/processed/ctg-studies.csv") 
+
+data("world.cities") 
+
+countries <- world.cities %>% 
+  group_by(country.etc) %>% 
+  summarize(n=n()) %>% 
+  rename(country = country.etc) %>% 
+  mutate(n = NA) %>% 
+  filter(country != "Jersey") %>% 
+  filter(country != "Georgia") 
+
+countries_columns <- countries %>% 
+  pivot_wider(names_from = country, values_from = n)
+```
+
+Total of studies retrieved from ClinicalTrials.gov:
+
+```{r}
+count(data) %>% gt()
+```
+
+Number of registrations which do not disclose the location:
+
+```{r}
+data %>% filter(Locations == "") %>% summarize(n=n()) %>% gt()
+```
+
+```{r}
+# Extract the country from Location column:   
+
+trials_countries <- bind_cols(data,countries_columns) %>% 
+  dplyr::select(!c(1:22,24))
+
+trials_countries[, -1] <- lapply(
+  names(trials_countries[, -1]),
+  function(x) str_detect(
+    trials_countries$Locations,
+    regex(x, ignore_case = TRUE)
+    )
+  )
+  
+trials_countries_two <- trials_countries %>%
+  dplyr::select(-1) %>%
+  mutate_all(
+    function(x) as.integer(x)
+    ) 
+
+countries_counts <- trials_countries_two %>% 
+  summarize_all(function(x) sum(x)) 
+
+countries_counts <- countries_counts %>% 
+  pivot_longer(everything() , names_to = "country", values_to = "n")
+```
+
+There are `r sum(countries_counts$n)` countries matched according to the countries extracted from locations, which does not match the expected number of countries after excluding missing locations.
+
+```{r}
+#| include: false
+
+countries_counts %>% filter(n > 0) %>% gt
+```
+
+Perhaps using other synonyms for the USA and UK will solve this:
+
+```{r}
+trials_countries_three <- trials_countries %>% 
+  mutate(
+    USA = case_when(
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "United States of America",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "United States",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "USA",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      TRUE ~ 0
+      ),
+    UK = case_when(
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "United Kingdom",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "England",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "UK",
+                       ignore_case = FALSE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "Great Britain",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "Wales",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      TRUE ~ 0
+      ),
+    'United Arab Emirates' = case_when(
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "United Arab Emirates",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "UAB",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      TRUE ~ 0
+      ),
+    'South Korea' = case_when(
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "South Korea",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      str_detect(trials_countries$Locations,
+                 regex(pattern = "Republic of Korea",
+                       ignore_case = TRUE)
+                 ) ~ 1,
+      TRUE ~ 0
+      )
+    )
+
+countries_counts <- trials_countries_three %>% 
+  select(-Locations) %>% 
+  summarize_all(function(x) sum(x)) 
+
+countries_counts <- countries_counts %>% 
+  pivot_longer(everything() , names_to = "country", values_to = "n")
+
+total <- sum(countries_counts$n)
+
+countries_counts <- countries_counts %>%
+  mutate(
+    percentage = round(
+      n/total*100,
+      2
+    )
+  )
+
+total 
+```
+
+Yes, this was increased significantly up to expected number of locations as some studies are expected to be multicountry studies.
+
+```{r}
+#| include: false
+countries_counts %>% filter(n > 0) %>% gt
+```
+
+I will proceed to join the dataset with the world map data `map_data("world")`.
+
+```{r}
+#| include: false
+
+mapdata <- map_data("world")
+mapdata$country <- mapdata$region
+mapdata <- mapdata %>% select(-(region))
+mapfig <- left_join(mapdata, countries_counts, by="country")
+
+# Check if join worked:  
+mapfig %>% 
+  group_by(country) %>% 
+  summarize(n=unique(n))
+```
+
+```{r}
+tab <- mapfig %>% 
+  group_by(country) %>% 
+  summarize(n=unique(n)) %>% 
+  filter(n > 0) 
+
+sum(tab$n) 
+```
+
+```{r}
+# Yes, the join worked. There were no losses.
+```
+
+```{r}
+# Change 0 for NA 
+mapfig$n[mapfig$n == 0] <- NA
+mapfig$percentage[mapfig$percentage == 0] <- NA
+```
+
+\pagebreak
+
+# Map
+
+```{r}
+#| include: false
+
+figA <- ggplot(mapfig, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = n), color = "black") +
+  scale_fill_gradient(name = "Registered trials", low = "gray92", high = "orangered3", na.value = "white") +
+  xlab("Longitude") + ylab("Latitude") +
+  ggtitle("Number of trials registered per country (participating site)") +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    axis.line = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+figA
+```
+
+```{r}
+#| out-width: 100%
+
+figB <- ggplot(mapfig, aes(x=long,y=lat,group=group)) +
+  geom_polygon(aes(fill=percentage),color="black")+
+  scale_fill_gradient(name="Registered trials (%)",low="gray92", high="orangered3", na.value = "white") +
+  xlab("Longitude")+ylab("Latitude")+
+  ggtitle("Percentage of trials registered per country (participating site)")+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank())
+
+figB
+```
+
+```{r}
+ggsave("Suppl_Map.png",
+       plot = figB,
+       width = 9,
+       height = 5,
+       path = figfolder,
+       units = "in", 
+       dpi = 300
+       )
+```
+
+The USA has way too many studies. Here are the absolute counts and percentages per country, in descending order:
+
+```{r}
+countries_counts %>% 
+  filter(n > 0) %>% 
+  arrange(desc(n)) %>% 
+  gt()
+```
+
+
+\pagebreak
+
+# Income group
+
+```{r}
+income <- read_excel("../data/raw/Income_groups.xlsx")
+
+income <- income %>% select(c(ISO3, Income, Region))
+
+iso <- iso3166 %>% 
+  rename(
+    ISO3 = a3,
+    country = mapname
+  )
+
+regions_income <- left_join(countries_counts, iso, by="country") %>% 
+  dplyr::select(-c(a2, ISOname, sovereignty))
+
+regions_income$ISO3[regions_income$country == "Finland"] <- "FIN"
+regions_income$ISO3[regions_income$country == "Norway"] <- "NOR"
+regions_income$ISO3[regions_income$country == "UK"] <- "GBR"
+
+regions_income <- left_join(regions_income, income, by="ISO3")
+
+tableincome <-  aggregate(regions_income$n, 
+                     by=list(Income=regions_income$Income), FUN=sum)
+tableincome <- tableincome %>% 
+  mutate(Percentage = as.numeric(x/sum(x)*100)) %>% 
+  arrange(desc(Percentage)) 
+tableincome$Percentage <- formatC(round(tableincome$Percentage, 1))
+
+tableincome_save <- tableincome %>% 
+  rename(n = x) %>% 
+  gt() 
+
+tableincome_save
+
+gt::gtsave(tableincome_save,
+           filename = "Table_income.docx",
+           path = tabfolder)
+```
+
+# Regions
+
+```{r}
+tableregion <-  aggregate(regions_income$n, 
+                     by=list(Region=regions_income$Region), FUN=sum)
+tableregion <- tableregion %>% 
+  mutate(Percentage = as.numeric(x/sum(x)*100)) %>% 
+  arrange(desc(Percentage)) 
+tableregion$Percentage <- formatC(round(tableregion$Percentage, 1))
+
+tableregion <- tableregion %>% 
+  rename(n = x) 
+
+tableregion_save <- tableregion %>% gt()
+tableregion_save
+
+gt::gtsave(tableregion_save,
+           filename = "Table_region.docx",
+           path = tabfolder)
+```
+
+\pagebreak
+
+# Figure 1 
+```{r}
+tableregion <- tableregion %>% column_to_rownames(var="Region")
+```
+
+```{r}
+Figure_1 <- grid.arrange(
+  figA,
+  tableGrob(tableregion),
+  heights = c(3, 1),
+  nrow = 2
+  )
+
+ggsave("Figure_1.png",
+       plot=Figure_1,
+       path=figfolder, 
+       width = 9,  
+       height = 7, 
+       units = "in", 
+       dpi = 900
+       )
+```
+
+\pagebreak
+
+# Descriptive analyses of registered studies, regardless of country:
+
+```{r}
+#| include: false 
+attach(data)
+```
+
+## Type of intervention 
+
+Frequencies:
+
+```{r}
+frequencies <- table(type_intervention)
+frequencies
+```
+
+Percentage:
+
+```{r}
+percentage <- round(prop.table(frequencies)*100,1)
+percentage
+```
+
+## Study results published in clinicaltrials.gov
+
+Frequencies:
+
+```{r}
+frequencies <- table(Study.Results)
+frequencies
+```
+
+Percentage:
+
+```{r}
+percentage <- round(prop.table(frequencies)*100,1)
+percentage
+```
+
+## Study status
+
+Frequencies:
+
+```{r}
+frequencies <- table(Study.Status)
+frequencies
+```
+
+Percentage:
+
+```{r}
+percentage <- round(prop.table(frequencies)*100,1)
+percentage
+```
+
+## Sample size
+
+```{r}
+sample_sizes <- data %>% 
+  filter(Enrollment > 0) %>% 
+  summarize(median = median(Enrollment),
+            Q1 = quantile(Enrollment,0.25),
+            Q3 = quantile(Enrollment,0.75),
+            min = min(Enrollment),
+            max = max(Enrollment)
+            )
+
+sample_sizes %>% gt()
+```
+
+
+```{r}
+#| include: false 
+detach(data)
+```
+
+\pagebreak
+
+# Dates ClinicalTrials.gov
+
+```{r}
+data <- data %>% 
+   mutate(
+     first_posted = as.integer(str_extract(First.Posted, "\\d{4}")),
+     results_posted = as.integer(str_extract(Results.First.Posted, "\\d{4}")),
+     start_date = as.integer(str_extract(Start.Date, "\\d{4}")),
+     completion_date = as.integer(str_extract(Completion.Date, "\\d{4}"))
+     )
+```
+
+```{r}
+year_first_posted <- data %>% 
+  group_by(first_posted) %>% 
+  summarise(n=n()) %>% 
+  complete(first_posted = seq(min(first_posted), max(first_posted)), fill=list(n=0))
+
+
+barplot(
+  year_first_posted$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="First Posted",
+  cex.names=0.8,
+  las = 2,
+  col="paleturquoise3",
+  names.arg=year_first_posted$first_posted
+  )
+```
+
+```{r}
+#| include: false   
+jpeg(
+filename=paste0(figfolder,"/Figure_first_posted.png"),
+width=6, height=5,
+units="in", res=300
+)
+
+barplot(
+  year_first_posted$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="First Posted",
+  cex.names=0.8,
+  las = 2,
+  col="paleturquoise3",
+  names.arg=year_first_posted$first_posted
+)
+
+plot <- recordPlot()
+dev.off()
+```
+
+```{r}
+year_start_date <- data %>% 
+  drop_na(start_date) %>% 
+  group_by(start_date) %>% 
+  summarise(n=n()) %>% 
+  complete(start_date = seq(min(start_date), max(start_date)), fill=list(n=0))
+
+barplot(
+  year_start_date$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Start Date",
+  cex.names=0.8,
+  las = 2,
+  col="darkslategray4",
+  names.arg=year_start_date$start_date
+  )
+```
+
+```{r}
+#| include: false   
+jpeg(
+filename=paste0(figfolder,"/Figure_start_date.png"),
+width=6, height=5,
+units="in", res=300
+)
+
+barplot(
+  year_start_date$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Start Date",
+  cex.names=0.8,
+  las = 2,
+  col="darkslategray4",
+  names.arg=year_start_date$start_date
+  )
+
+plot <- recordPlot()
+dev.off()
+```
+
+```{r}
+year_completion_date <- data %>% 
+  drop_na(completion_date) %>% 
+  group_by(completion_date) %>% 
+  summarise(n=n()) %>% 
+  complete(completion_date = seq(min(completion_date), max(completion_date)), fill=list(n=0))
+
+barplot(
+  year_completion_date$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Completion Date",
+  cex.names=0.8,
+  las = 2,
+  col="palegreen3",
+  names.arg=year_completion_date$completion_date
+  )
+```
+
+```{r}
+#| include: false   
+jpeg(
+filename=paste0(figfolder,"/Figure_completion_date.png"),
+width=6, height=5,
+units="in", res=300
+)
+
+barplot(
+  year_completion_date$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Completion Date",
+  cex.names=0.7,
+  las = 2,
+  col="palegreen3",
+  names.arg=year_completion_date$completion_date
+  )
+
+plot <- recordPlot()
+dev.off()
+```
+
+```{r}
+year_results_posted <- data %>% 
+  drop_na(results_posted) %>% 
+  group_by(results_posted) %>% 
+  summarise(n=n()) %>% 
+  complete(results_posted = seq(min(results_posted), max(results_posted)), fill=list(n=0))
+
+barplot(
+  year_results_posted$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Results First Posted",
+  las = 2,
+  col="darkgoldenrod3",
+  names.arg=year_results_posted$results_posted
+  )
+```
+
+```{r}
+#| include: false   
+jpeg(
+filename=paste0(figfolder,"/Figure_results_posted.png"),
+width=6, height=5,
+units="in", res=300
+)
+
+barplot(
+  year_results_posted$n,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Results First Posted",
+  las = 2,
+  col="darkgoldenrod3",
+  names.arg=year_results_posted$results_posted
+  )
+
+plot <- recordPlot()
+dev.off()
+```
+
+# Dates PubMed
+
+```{r}
+pubmed <- read.csv(
+  "../data/raw/PubMed_Timeline_Results_by_Year.csv",
+  skip = 1
+  ) %>% 
+  complete(Year = seq(min(Year), max(Year)), fill=list(n=0))
+```
+
+```{r}
+barplot(
+  pubmed$Count,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Published Studies per Year (PubMed)",
+  las = 2,
+  col="royalblue2",
+  names.arg=pubmed$Year
+)
+```
+
+```{r}
+#| include: false   
+jpeg(
+filename=paste0(figfolder,"/Figure_PubMed.png"),
+width=6, height=5,
+units="in", res=300
+)
+
+barplot(
+  pubmed$Count,
+  xlab="Year",
+  ylab="Absolute Frequency",
+  main="Published Studies per Year (PubMed)",
+  las = 2,
+  col="royalblue2",
+  names.arg=pubmed$Year
+)
+
+plot <- recordPlot()
+dev.off()
+```
+
+\pagebreak
+
+# Package References
+```{r}
+#| include: false
+report::cite_packages(session)
+```
+
+  - Auguie B (2017). _gridExtra: Miscellaneous Functions for "Grid" Graphics_. R package version 2.3, <https://CRAN.R-project.org/package=gridExtra>.
+  - Becker OScbRA, Minka ARWRvbRBEbTP, Deckmyn. A (2023). _maps: Draw Geographical Maps_. R package version 3.4.2, <https://CRAN.R-project.org/package=maps>.
+  - Gohel D, Moog S (2024). _officer: Manipulation of Microsoft Word and PowerPoint Documents_. R package version 0.6.5, <https://CRAN.R-project.org/package=officer>.
+  - Gohel D, Skintzos P (2024). _flextable: Functions for Tabular Reporting_. R package version 0.9.5, <https://CRAN.R-project.org/package=flextable>.
+  - Grolemund G, Wickham H (2011). “Dates and Times Made Easy with lubridate.” _Journal of Statistical Software_, *40*(3), 1-25. <https://www.jstatsoft.org/v40/i03/>.
+  - Iannone R, Cheng J, Schloerke B, Hughes E, Lauer A, Seo J (2024). _gt: Easily Create Presentation-Ready Display Tables_. R package version 0.10.1, <https://CRAN.R-project.org/package=gt>.
+  - Makowski D, Lüdecke D, Patil I, Thériault R, Ben-Shachar M, Wiernik B (2023). “Automated Results Reporting as a Practical Tool to Improve Reproducibility and Methodological Best Practices Adoption.” _CRAN_. <https://easystats.github.io/report/>.
+  - Müller K, Wickham H (2023). _tibble: Simple Data Frames_. R package version 3.2.1, <https://CRAN.R-project.org/package=tibble>.
+  - Neuwirth E (2022). _RColorBrewer: ColorBrewer Palettes_. R package version 1.1-3, <https://CRAN.R-project.org/package=RColorBrewer>.
+  - R Core Team (2024). _R: A Language and Environment for Statistical Computing_. R Foundation for Statistical Computing, Vienna, Austria. <https://www.R-project.org/>.
+  - Rinker TW, Kurkiewicz D (2018). _pacman: Package Management for R_. version 0.5.0, <http://github.com/trinker/pacman>.
+  - Wickham H (2016). _ggplot2: Elegant Graphics for Data Analysis_. Springer-Verlag New York. ISBN 978-3-319-24277-4, <https://ggplot2.tidyverse.org>.
+  - Wickham H (2023). _forcats: Tools for Working with Categorical Variables (Factors)_. R package version 1.0.0, <https://CRAN.R-project.org/package=forcats>.
+  - Wickham H (2023). _stringr: Simple, Consistent Wrappers for Common String Operations_. R package version 1.5.1, <https://CRAN.R-project.org/package=stringr>.
+  - Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L, Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K, Ooms J, Robinson D, Seidel DP, Spinu V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). “Welcome to the tidyverse.” _Journal of Open Source Software_, *4*(43), 1686. doi:10.21105/joss.01686 <https://doi.org/10.21105/joss.01686>.
+  - Wickham H, Bryan J (2023). _readxl: Read Excel Files_. R package version 1.4.3, <https://CRAN.R-project.org/package=readxl>.
+  - Wickham H, François R, Henry L, Müller K, Vaughan D (2023). _dplyr: A Grammar of Data Manipulation_. R package version 1.1.4, <https://CRAN.R-project.org/package=dplyr>.
+  - Wickham H, Henry L (2023). _purrr: Functional Programming Tools_. R package version 1.0.2, <https://CRAN.R-project.org/package=purrr>.
+  - Wickham H, Hester J, Bryan J (2024). _readr: Read Rectangular Text Data_. R package version 2.1.5, <https://CRAN.R-project.org/package=readr>.
+  - Wickham H, Vaughan D, Girlich M (2024). _tidyr: Tidy Messy Data_. R package version 1.3.1, <https://CRAN.R-project.org/package=tidyr>.
+  
+
+```{r}
+#| include: false
+
+pacman::p_unload(negate = TRUE)
+
+rm(list = ls())
+```
+

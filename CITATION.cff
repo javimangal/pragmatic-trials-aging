@@ -1,12 +1,24 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "My Research Software"
+title: "Chapter 9. Pragmatic Trials. In: Aging Research - Methodological Issues, 3rd Edition"
 authors:
-  - family-names: Druskat
-    given-names: Stephan
-    orcid: https://orcid.org/1234-5678-9101-1121
-version: 2.0.4
-date-released: 2021-08-11
-doi: 10.5281/zenodo.1234
-license: Apache-2.0
-repository-code: "https://github.com/citation-file-format/my-research-software"
+  - family-names: Mancilla Galindo
+    given-names: Javier
+    orcid: https://orcid.org/0000-0002-0718-467X
+  - family-names: Garza-Santiago
+    given-names: Esmeralda
+    orcid: https://orcid.org/0000-0002-6370-7922
+  - family-names: Fernández-Urrutia
+    given-names: Liliana Aline
+    orcid: https://orcid.org/0009-0001-9252-2636
+  - family-names: Pérez-Nieto
+    given-names: Orlando Rubén
+    orcid: https://orcid.org/0000-0002-3875-0945
+  - family-names: Kammar-García
+    given-names: Ashuin
+    orcid: https://orcid.org/0000-0002-3875-0945
+version: 1.0.0
+date-released: 2024-05-04
+doi: 
+license: MIT
+repository-code: "https://github.com/javimangal/pragmatic-trials-aging"

@@ -1,0 +1,306 @@
+---
+title: "Chapter 9. Pragmatic clinical trials in the elderly"
+subtitle: "Data cleaning and conditions studied"
+author: "Javier Mancilla Galindo"
+date: "`r Sys.Date()`"
+execute: 
+  echo: false
+  warning: false
+toc: true
+format:
+  pdf:
+    documentclass: scrartcl
+editor: visual
+---
+
+\pagebreak
+
+# Packages and session information
+
+```{r}
+
+if (!require("pacman", quietly = TRUE)) {
+  install.packages("pacman")
+}
+
+pacman::p_load(
+  tidyverse,
+  tm,
+  wordcloud2,
+  htmlwidgets,
+  webshot2,
+  gt,
+  report
+)
+
+```
+
+```{r}
+figfolder <- "../results/output_figures"
+tabfolder <- "../results/output_tables"
+dir.create(figfolder, showWarnings = FALSE)
+dir.create(tabfolder, showWarnings = FALSE)
+
+# Credits chunk of code: Alex Bossers, Utrecht University (a.bossers@uu.nl)
+
+session <- sessionInfo()
+# remove clutter
+session$BLAS <- NULL
+session$LAPACK <- NULL
+session$loadedOnly <- NULL
+
+session
+```
+
+\pagebreak
+
+# Initial assessment of dataset
+
+```{r}
+#| include: false 
+data <- read.csv("../data/raw/ctg-studies.csv") 
+```
+
+Total of studies retrieved:
+
+```{r}
+count(data) %>% gt()
+```
+
+Some of these studies are observational:
+
+Frequencies:
+
+```{r}
+frequencies <- table(data$Study.Type)
+frequencies
+```
+
+Percentage:
+
+```{r}
+percentage <- round(prop.table(frequencies)*100,1)
+percentage
+```
+
+Therefore, I will exclude observational studies. We now have a total of:
+
+```{r}
+data <- data %>% filter(Study.Type != "OBSERVATIONAL")
+
+count(data) %>% gt()
+```
+
+Some of the studies declare having included older adults, but the condition under study is related to pregnancy. The count of studies after exclusion of pregnancy-related studies is:
+
+```{r}
+data <- data %>% 
+  mutate(
+    Conditions = case_when(
+      str_detect(data$Conditions,
+                 regex(pattern = "pregnan",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "natal",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "labor",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "eclampsia",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "birth",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "maternal",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "child",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "abortum",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "partum",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "gestation",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "parous",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "cesar",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      str_detect(data$Conditions,
+                 regex(pattern = "placenta",
+                       ignore_case = TRUE)
+                 ) ~ "exclude",
+      TRUE ~ data$Conditions
+      )
+) %>% 
+  filter(Conditions != "exclude")
+
+count(data) %>% gt()
+```
+
+# Type intervention
+
+I will create a variable for the type of intervention and save the clean dataset.
+
+```{r}
+data <- data %>% 
+  mutate(
+    type_intervention = tolower(
+      str_extract(Interventions, "[^:]+")
+      )
+  )
+```
+
+```{r}
+table(data$type_intervention)
+```
+
+```{r}
+write.csv(
+  data,
+  "../data/processed/ctg-studies.csv"
+)
+```
+
+\pagebreak
+
+# Conditions
+
+Text mining for the most frequently repeated terms in the conditions, as reported in the study registries retrieved from clinicaltrials.gov.
+
+```{r}
+Conditions <- data %>% pull(Conditions)
+  
+# COVID-19
+Conditions <- gsub('covid19', 'covid-19', Conditions, ignore.case = TRUE)
+Conditions <- gsub('sars-cov-2', 'covid-19', Conditions, ignore.case = TRUE)
+Conditions <- gsub('coronavirus', 'covid-19', Conditions, ignore.case = TRUE)
+Conditions <- gsub('corona virus', 'covid-19', Conditions, ignore.case = TRUE)
+
+# Infections 
+Conditions <- gsub('infection', 'infections', Conditions, ignore.case = TRUE)
+Conditions <- gsub('infectionss', 'infections', Conditions, ignore.case = TRUE)
+
+# Depression 
+Conditions <- gsub('depressive', 'depression', Conditions, ignore.case = TRUE)
+```
+
+
+```{r}
+docs <- Corpus(VectorSource(Conditions))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm_map(docs, toSpace, ",")
+
+docs <- tm_map(docs, removeWords, stopwords("english"))
+
+dtm <- TermDocumentMatrix(docs) 
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+
+table <- data.frame(word = names(v),freq=v) %>% 
+  filter(
+  ! word %in% c("disease","diseases","stage","disorder","disorders","type","with","use","ajcc","cell","end")
+)
+```
+
+```{r}
+#| include: false
+
+wordcloud <- wordcloud2(table)
+
+saveWidget(
+  wordcloud,
+  "tmp.html",
+  selfcontained = TRUE
+  )
+
+webshot(
+  "tmp.html",
+  paste0(figfolder,"/Figure_2.png"),
+  delay =5,
+  vwidth = 720,
+  vheight = 640
+  )
+
+file.remove("tmp.html")
+```
+
+### Wordcloud
+
+![Wordcloud of most frequently repeated terms in trial registrations](images/Figure_2.png)
+
+\pagebreak
+
+### Chronic vs acute conditions
+
+```{r}
+table %>% 
+  filter(word %in% c("acute","chronic")) %>% 
+  gt
+```
+
+### Top 10 terms
+
+```{r}
+head(table, 14) %>% 
+  filter(! word %in% c("acute","chronic","mellitus","carcinoma")) %>% 
+  gt
+```
+
+```{r}
+#| include: false
+report::cite_packages(session)
+```
+
+\pagebreak
+
+# Package References
+
+  - Chang W (2023). _webshot2: Take Screenshots of Web Pages_. R package version 0.1.1, <https://CRAN.R-project.org/package=webshot2>.
+  - Feinerer I, Hornik K (2024). _tm: Text Mining Package_. R package version 0.7-13, <https://CRAN.R-project.org/package=tm>. Feinerer I, Hornik K, Meyer D (2008). “Text Mining Infrastructure in R.” _Journal of Statistical Software_, *25*(5), 1-54. doi:10.18637/jss.v025.i05 <https://doi.org/10.18637/jss.v025.i05>.
+  - Grolemund G, Wickham H (2011). “Dates and Times Made Easy with lubridate.” _Journal of Statistical Software_, *40*(3), 1-25. <https://www.jstatsoft.org/v40/i03/>.
+  - Hornik K (2020). _NLP: Natural Language Processing Infrastructure_. R package version 0.2-1, <https://CRAN.R-project.org/package=NLP>.
+  - Iannone R, Cheng J, Schloerke B, Hughes E, Lauer A, Seo J (2024). _gt: Easily Create Presentation-Ready Display Tables_. R package version 0.10.1, <https://CRAN.R-project.org/package=gt>.
+  - Lang D, Chien G (2018). _wordcloud2: Create Word Cloud by 'htmlwidget'_. R package version 0.2.1, <https://CRAN.R-project.org/package=wordcloud2>.
+  - Makowski D, Lüdecke D, Patil I, Thériault R, Ben-Shachar M, Wiernik B (2023). “Automated Results Reporting as a Practical Tool to Improve Reproducibility and Methodological Best Practices Adoption.” _CRAN_. <https://easystats.github.io/report/>.
+  - Müller K, Wickham H (2023). _tibble: Simple Data Frames_. R package version 3.2.1, <https://CRAN.R-project.org/package=tibble>.
+  - R Core Team (2024). _R: A Language and Environment for Statistical Computing_. R Foundation for Statistical Computing, Vienna, Austria. <https://www.R-project.org/>.
+  - Rinker TW, Kurkiewicz D (2018). _pacman: Package Management for R_. version 0.5.0, <http://github.com/trinker/pacman>.
+  - Vaidyanathan R, Xie Y, Allaire J, Cheng J, Sievert C, Russell K (2023). _htmlwidgets: HTML Widgets for R_. R package version 1.6.4, <https://CRAN.R-project.org/package=htmlwidgets>.
+  - Wickham H (2016). _ggplot2: Elegant Graphics for Data Analysis_. Springer-Verlag New York. ISBN 978-3-319-24277-4, <https://ggplot2.tidyverse.org>.
+  - Wickham H (2023). _forcats: Tools for Working with Categorical Variables (Factors)_. R package version 1.0.0, <https://CRAN.R-project.org/package=forcats>.
+  - Wickham H (2023). _stringr: Simple, Consistent Wrappers for Common String Operations_. R package version 1.5.1, <https://CRAN.R-project.org/package=stringr>.
+  - Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L, Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K, Ooms J, Robinson D, Seidel DP, Spinu V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). “Welcome to the tidyverse.” _Journal of Open Source Software_, *4*(43), 1686. doi:10.21105/joss.01686 <https://doi.org/10.21105/joss.01686>.
+  - Wickham H, François R, Henry L, Müller K, Vaughan D (2023). _dplyr: A Grammar of Data Manipulation_. R package version 1.1.4, <https://CRAN.R-project.org/package=dplyr>.
+  - Wickham H, Henry L (2023). _purrr: Functional Programming Tools_. R package version 1.0.2, <https://CRAN.R-project.org/package=purrr>.
+  - Wickham H, Hester J, Bryan J (2024). _readr: Read Rectangular Text Data_. R package version 2.1.5, <https://CRAN.R-project.org/package=readr>.
+  - Wickham H, Vaughan D, Girlich M (2024). _tidyr: Tidy Messy Data_. R package version 1.3.1, <https://CRAN.R-project.org/package=tidyr>.
+
+```{r}
+#| include: false
+
+pacman::p_unload(negate = TRUE)
+
+rm(list = ls())
+```
