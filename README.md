@@ -4,7 +4,7 @@ This repository contains the associated supplementary materials for the chapter 
 
 ## Usage
 
-You will find the descriptions of the methods of the systematic literature search on the [docs](docs/) directory, as well as a report with the R version and package dependencies for the project. Figures and tables referenced in the chapter can be found in the [results](results/) file. The code for reproducibility of such outputs can be found in the [R folder](R/). The [PRECIS-2 script](R/PRECIS-2.R) can be used to generate a comparative PRECIS-2 figure of two hypothetical trials. 
+You will find the descriptions of the methods of the systematic literature search on the [docs](docs/) directory, as well as a report with the R version and package dependencies for the project. Figures and tables referenced in the chapter can be found in the [results](results/) file. The code for reproducibility of such outputs can be found in the [R folder](R/). 
 
 ## Project Structure
 
@@ -31,6 +31,9 @@ The project structure distinguishes three kinds of folders:
 │   └── output_tables     <- Other output for the manuscript or reports (PG)
 └── R                     <- Source code for this project (HW)
 ```
+
+# PRECIS-2 Examples   
+An example of two hypothetical trials, one being explanatory and the other pragmatic on the [PRECIS-2](https://www.precis-2.org/Help/Documentation/Help) spectrum is available in the [PRECIS-2-example repository](https://github.com/javimangal/PRECIS-2-example).
 
 ## License
 
