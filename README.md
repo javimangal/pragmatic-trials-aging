@@ -1,3 +1,10 @@
+
+<div align="center" style="margin-top: 20px;">
+  <a href="https://link.springer.com/book/10.1007/978-3-319-95387-8">
+    <img src="logo.png" alt="This is an AI-generated logo using OpenAI's DALL-E. The intended use is explicitely non-commercial" width="80%">
+  </a>
+</div>
+
 # Description
 
 This repository contains the associated supplementary materials for the chapter entitled "Chapter 9 - Pragmatic Trials", which will be published as part of the 3rd edition of the book Aging Research - Methodological Issues. This will be a brand new chapter of the re-edition of the book. You can consult the [second edition here](https://link.springer.com/book/10.1007/978-3-319-95387-8).
