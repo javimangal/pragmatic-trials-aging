@@ -1,13 +1,15 @@
 
 <div align="center" style="margin-top: 20px;">
-  <a href="https://link.springer.com/book/10.1007/978-3-319-95387-8">
+  <a href="https://link.springer.com/chapter/10.1007/978-3-031-76469-1_9">
     <img src="logo.png" alt="This is an AI-generated logo using OpenAI's DALL-E. The intended use is explicitely non-commercial" width="80%">
   </a>
 </div>
 
+[![Static Badge](https://img.shields.io/badge/peer%20reviewed%20article-10.1007%2F978-3-031-76469-1_9-purple)](https://link.springer.com/chapter/10.1007/978-3-031-76469-1_9)
+
 # Description
 
-This repository contains the associated supplementary materials for the chapter entitled "Chapter 9 - Pragmatic Trials", which will be published as part of the 3rd edition of the book Aging Research - Methodological Issues. This will be a brand new chapter of the re-edition of the book. You can consult the [second edition here](https://link.springer.com/book/10.1007/978-3-319-95387-8).
+This repository contains the associated supplementary materials for the chapter entitled "Chapter 9 - Pragmatic Trials", which is part of the 3rd edition of the book Aging Research - Methodological Issues. You can [consult the chapter here](https://link.springer.com/chapter/10.1007/978-3-031-76469-1_9).
 
 ## Usage
 
