@@ -5,7 +5,7 @@
   </a>
 </div>
 
-[![Static Badge](https://img.shields.io/badge/peer%20reviewed%20article-10.1007%2F978-3-031-76469-1_9-purple)](https://link.springer.com/chapter/10.1007/978-3-031-76469-1_9)
+[![Static Badge](https://img.shields.io/badge/peer%20reviewed%20book-Chapter_9-purple)](https://link.springer.com/chapter/10.1007/978-3-031-76469-1_9)
 
 # Description
 
